@@ -1,43 +1,58 @@
-import { Stack } from 'expo-router';
-import React from 'react';
+import React from "react";
+import { Stack } from "expo-router";
 
-// Este é o layout raiz da sua aplicação
-// Ele define que todas as telas dentro de 'app' serão parte de uma navegação em pilha
 export default function RootLayout() {
   return (
     <Stack>
-      {/* Cada tela é configurada aqui. O Expo Router encontra os arquivos automaticamente */}
-      <Stack.Screen 
-      name="index" 
-      options={{ 
-        title: 'Tela Inicial' 
-      }} />
+      {/* Tela inicial */}
+      <Stack.Screen
+        name="index"
+        options={{
+          headerShown: false, // esconde completamente o header
+        }}
+      />
 
-      <Stack.Screen 
-      name="detalhes" 
-      options={{ 
-        title: 'Página de Detalhes' 
-      }} />
+      <Stack.Screen
+        name="detalhes"
+        options={{
+          headerShown: false, // header escondido, você pode colocar HeaderPerfil dentro da tela
+        }}
+      />
 
-      <Stack.Screen 
-      name= "cadastro"
-      options = {{
-        title: 'Página de Cadastro'
-      }} />
+      <Stack.Screen
+        name="cadastro"
+        options={{
+          headerShown: false,
+        }}
+      />
 
-      <Stack.Screen 
-      name= "login"
-      options = {{
-        title: 'Página de Login'
-      }} />
-      <Stack.Screen 
-      name= "home"
-      options = {{
-        title: 'Futuro home'
-      }} />
+      <Stack.Screen
+        name="login"
+        options={{
+          headerShown: false,
+        }}
+      />
 
+      <Stack.Screen
+        name="home"
+        options={{
+          headerShown: false,
+        }}
+      />
+
+      <Stack.Screen
+        name="chat"
+        options={{
+          headerShown: false,
+        }}
+      />
+
+      <Stack.Screen
+        name="perfil"
+        options={{
+          headerShown: false,
+        }}
+      />
     </Stack>
-
- 
   );
 }
