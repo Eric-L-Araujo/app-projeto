@@ -31,7 +31,7 @@ export default function HomeScreen() {
   const appIcons: AppIcon[] = [
     { id: 'configuracao', name: 'Personalizar', icon: 'color-palette', route: '/configuracoes', description: 'Personalizar tema\ne cores' },
     { id: 'busca', name: 'Buscar', icon: 'search', route: '/mapa', description: 'Buscar salas no mapa' },
-    { id: 'sobre', name: 'Sobre', icon: 'information-circle', route: '/detalhes', description: 'Informações do app' },
+    { id: 'sobre', name: 'Sobre os devs', icon: 'information-circle', route: '/sobrenos', description: 'Desenvolvedores do app' },
   ];
   useEffect(() => {
   const checkUser = async () => {
