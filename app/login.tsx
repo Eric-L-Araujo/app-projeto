@@ -1,19 +1,34 @@
 import { yupResolver } from '@hookform/resolvers/yup';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import { Link, useRouter } from 'expo-router';
+import React, { useEffect, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { ActivityIndicator, Image, StatusBar, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as yup from 'yup';
-import BotaoCustomizado from '../components/buttons';
-import { useSettings } from '../hooks/useSettings';
-import { AppColors } from '../constants/theme';
-import { Ionicons } from '@expo/vector-icons';
-import { auth } from '../firebaseConfig';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { signInWithEmailAndPassword } from 'firebase/auth';
+import BotaoCustomizado from '@/components/buttons';
+import { useSettings } from '@/hooks/useSettings';
+import { AppColors } from '@/constants/theme';
+import { Ionicons, AntDesign } from '@expo/vector-icons';
+import { auth, db } from '@/firebaseConfig';
+import { 
+  signInWithEmailAndPassword, 
+  GoogleAuthProvider,  //<-- Provedor do Google (Comentado)
+  signInWithCredential, //<-- Função para logar com o "bilhete" (Comentado)
+  GithubAuthProvider, // Importado do firebase/auth (Comentado)
+} from 'firebase/auth';
+import { signInAnonymously } from 'firebase/auth'; // Login Anônimo
+// import { signInWithPhoneNumber } from 'firebase/auth'; // <-- REMOVIDO: Login por Telefone
 
+// APIs Externas (Comentadas)
+import * as WebBrowser from 'expo-web-browser'; 
+import { makeRedirectUri } from 'expo-auth-session'; 
+
+import { doc, setDoc, getDoc } from 'firebase/firestore'; 
+import { router } from 'expo-router';
+
+//Necessário para o pop-up funcionar no Expo Go
+// WebBrowser.maybeCompleteAuthSession(); //<-- Comentado
 
 
 //Validações
@@ -22,6 +37,14 @@ const schema = yup.object({
   password: yup.string().min(6, "A senha deve conter pelo menos 6 dígitos.").max(14, "Senha muito longa. Menos de 14 caracteres, por favor.").required("Informe sua senha."),
 });
 
+// AQUI ESTÁ O BLOCO CRÍTICO DE REDIRECIONAMENTO (Comentado)
+
+// URI DE REDIRECIONAMENTO PARA GITHUB (FORÇA O PROXY DO EXPO)
+// const redirectUriGithub = "https://auth.expo.io/@alepereira/mapa-unisuam"; 
+
+// console.log('URI de Redirecionamento GITHUB:', redirectUriGithub); 
+
+// FIM DO BLOCO CRÍTICO
 
 export default function telaLogin () {
   const router = useRouter();
@@ -33,45 +56,92 @@ export default function telaLogin () {
 
   const [loading, setLoading] = useState(false);
   const [isChecked, setItChecked] = useState(false);
+  // const [phoneNumber, setPhoneNumber] = useState(''); // REMOVIDO: Estado para o número de telefone
+  const [loadingAnon, setLoadingAnon] = useState(false); // Estado de loading para Anônimo
 
-  //Função de envio
- 
- async function handleSignIn(data: any) {
-  setLoading(true);
 
-  try {
-    const userCredential = await signInWithEmailAndPassword(auth, data.email, data.password);
-    const user = userCredential.user;
-
-    // SALVA O USUÁRIO NO ASYNC STORAGE
-    await AsyncStorage.setItem('loggedUser', JSON.stringify({
-      uid: user.uid,
-      email: user.email
-    }));
-
-    setLoading(false);
-    reset();
-    router.replace('/'); // Vai para home
-  } catch (error: any) {
-    setLoading(false);
-    console.log('Erro no login:', error.code, error.message);
-    Alert.alert('Erro', 'E-mail ou senha inválidos. Verifique e tente novamente.');
+  // NOVA FUNÇÃO PARA LOGIN ANÔNIMO (ATIVA)
+  async function handleAnonymousSignIn() {
+      setLoadingAnon(true);
+      try {
+          await signInAnonymously(auth);
+          setLoadingAnon(false);
+          router.replace('/'); // Redireciona
+      } catch (error: any) {
+          setLoadingAnon(false);
+          console.error("Erro no login anônimo:", error);
+          Alert.alert("Erro", "Não foi possível entrar como usuário anônimo.");
+      }
   }
-}
+
+  // FUNÇÃO MANUAL PARA O LOGIN COM GITHUB (COMENTADA)
+  /*
+  async function handleGithubSignIn() {
+    setLoadingAnon(true);
+
+    const githubClientId = 'Ov23liOj9DWJt2bHmjgV'; 
+    
+    // 1. CONSTRÓI A URL DE AUTORIZAÇÃO MANUALMENTE (USANDO A URI DE PROXY GERADA)
+    const authUrl = 
+        `https://github.com/login/oauth/authorize?` +
+        `client_id=${githubClientId}&` +
+        `scope=read:user,user:email&` +
+        `redirect_uri=${encodeURIComponent(redirectUriGithub)}&` + 
+        `response_type=code`;
+    
+    // 2. ABRE A JANELA DO NAVEGADOR
+    const result = await WebBrowser.openAuthSessionAsync(
+        authUrl, 
+        redirectUriGithub
+    );
+
+    // 3. PROCESSA O RESULTADO
+    if (result.type === 'success' && result.url) {
+        // ... Lógica de extração de código e autenticação no Firebase
+    } else {
+      setLoadingAnon(false);
+      Alert.alert("Erro", "Falha na comunicação com o GitHub ou login interrompido.");
+    }
+
+    setLoadingAnon(false);
+  }
+  */
+
+  //Função de login com E-mail/Senha (Mantida)
+  async function handleSignIn(data: any) {
+    setLoading(true);
+    try {
+      await signInWithEmailAndPassword(auth, data.email, data.password);
+      setLoading(false);
+      reset(); 
+      router.replace('/'); 
+    } catch (error: any) {
+      setLoading(false);
+      console.log('Erro no login:', error.code, error.message);
+      if (error.code === 'auth/invalid-credential' || 
+          error.code === 'auth/user-not-found' || 
+          error.code === 'auth/wrong-password') {
+        Alert.alert('Erro', 'E-mail ou senha inválidos. Verifique e tente novamente.');
+      } else if (error.code === 'auth/invalid-email') {
+        Alert.alert('Erro', 'O formato do e-mail é inválido.');
+      } else {
+        Alert.alert('Erro', 'Ocorreu um erro ao tentar fazer login. Tente novamente mais tarde.');
+      }
+    }
+  }
+
   return (
     <View style={styles.containerPrincipal}>
       <LinearGradient
         colors={['#9560e1', '#005c83']}
         style={styles.gradient}
       />
-
       <SafeAreaView style={styles.container}>
         <StatusBar 
           barStyle="light-content"
           backgroundColor="transparent"
           translucent
         />
-
         <Image source={require("../assets/images/logotipo-coruja.png")} style={{
           alignSelf: 'center',
           width: 150, 
@@ -81,6 +151,7 @@ export default function telaLogin () {
 
         <Text style={styles.text}>Acesse sua conta</Text>
 
+        {/*E-mail*/}
         <Controller control={control} name='email' render={({ field: {onChange, onBlur, value} }) => (
           <View style={[styles.inputContainer, {
             borderColor: errors.email ? '#ff375b' : 'transparent',
@@ -88,7 +159,7 @@ export default function telaLogin () {
             <Ionicons name="mail-outline" size={24} color={AppColors.textLight} style={styles.icon} />
             <TextInput style={styles.input} 
               onChangeText={onChange} 
-              onBlur={onBlur}
+              onBlur={onBlur} 
               value={value} 
               placeholder='Digite seu e-mail'
               placeholderTextColor={AppColors.textLight}
@@ -99,6 +170,7 @@ export default function telaLogin () {
         )} />
         {errors.email && <Text style={styles.labelError}>{errors.email?.message}</Text>}
 
+        {/*Senha*/}
         <Controller control={control} name='password' render={({ field: {onChange, onBlur, value} }) => (
           <View style={[styles.inputContainer, {
             borderColor: errors.password ? '#ff375b' : 'transparent',
@@ -106,11 +178,11 @@ export default function telaLogin () {
             <Ionicons name="lock-closed-outline" size={24} color={AppColors.textLight} style={styles.icon} />
             <TextInput style={styles.input} 
               onChangeText={onChange} 
-              onBlur={onBlur}
+              onBlur={onBlur} 
               value={value} 
               placeholder='Digite sua senha'
               placeholderTextColor={AppColors.textLight}
-              secureTextEntry={true} //Esconde a senha
+              secureTextEntry={true} 
             />
           </View>
         )} />
@@ -125,18 +197,23 @@ export default function telaLogin () {
           <View style={{flexDirection: 'row', alignItems: 'center', gap: 6}}>
             <Switch 
               trackColor={{ false: '#767577', true: colors.primary }}
-              thumbColor={isChecked ? '#FFFFFF' : colors.border}
+              thumbColor={isChecked ? colors.background : '#f4f3f4'}
               onValueChange={() => setItChecked((prev) => !prev)}
               value={isChecked}
-              accessibilityLabel='Mantenha-me conectado'
-              accessibilityHint="Ativa ou desativa se manter conectado no app"
-              accessibilityState={{checked: isChecked}}
             />
-            <Text style={styles.text2}>Mantenha-me conectado</Text>
+            <Text style={{color: AppColors.textLight, fontSize: 16, fontWeight: '500'}}>Lembrar-me</Text>
           </View>
+
+          {/*<Link href={'/recuperarSenha'} asChild>
+            <TouchableOpacity>
+              <Text style={{color: AppColors.textLight, fontSize: 16, fontWeight: '500'}}>
+                Esqueci a senha
+              </Text>
+            </TouchableOpacity>
+          </Link>*/}
         </View>
 
-        {/* Botão Acessar */}
+        {/*Botão 'Acessar'*/}
         <TouchableOpacity style={[styles.button, loading && { opacity: 0.7 }]}
           onPress={handleSubmit(handleSignIn)}
           disabled={loading}
@@ -148,14 +225,33 @@ export default function telaLogin () {
           )}
         </TouchableOpacity>
 
-        <Text style={styles.text2}>Você é novo por aqui?</Text>
-
-        {/* Botão 'Criar conta' */}
+        {/*Botão 'Cadastrar'*/}
         <BotaoCustomizado title="Criar conta" onPress={() => router.push('/cadastro')} />
+
+        {/*Divisor*/}
+        <View style={styles.dividerContainer}>
+          <View style={styles.dividerLine} />
+          <Text style={styles.dividerText}>OU</Text>
+          <View style={styles.dividerLine} />
+        </View>
+        
+        {/*Botão para Login Anônimo (Puro Firebase)*/}
+        <TouchableOpacity 
+          style={[styles.googleButton, { backgroundColor: '#607d8b' }]} // Cor Cinza/Azul
+          onPress={handleAnonymousSignIn} 
+          disabled={loadingAnon}
+        >
+          {loadingAnon ? (
+            <ActivityIndicator size="small" color="#fff" />
+          ) : (
+            <Text style={[styles.googleButtonText, { color: '#fff' }]}>Entrar como Anônimo</Text>
+          )}
+        </TouchableOpacity>
       </SafeAreaView>
     </View>
   );
 }
+
 
 const styles = StyleSheet.create({
   containerPrincipal: {
@@ -175,9 +271,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
   },
   text: { 
-    textAlign: 'center',
+    textAlign: 'left',
     fontSize: 30,
-    marginBottom: 10,
+    marginBottom: 16,
     fontWeight: '800',
     width: '100%',
     color: '#FFFFFF',
@@ -185,7 +281,6 @@ const styles = StyleSheet.create({
   text2: {
     fontSize: 16,
     color: '#FFFFFF',
-    marginTop: 5,
   },
   inputContainer: {
     flexDirection: 'row',
@@ -228,5 +323,39 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#7e57c2',
     marginBottom: 8,
-  }
+  },
+  // ESTILO ORIGINAL DO BOTÃO GOOGLE
+  googleButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#DB4437', // Cor de fundo original do Google
+    width: '100%',
+    height: 45,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    marginTop: 10,
+  },
+  googleButtonText: {
+    color: '#000', // Cor de texto original do Google
+    fontWeight: 'bold',
+    fontSize: 16,
+    marginLeft: 10,
+  },
+  dividerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: '100%',
+    marginVertical: 20,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  dividerText: {
+    color: 'rgba(255, 255, 255, 0.7)',
+    marginHorizontal: 10,
+    fontWeight: '600',
+  },
 });

@@ -14,7 +14,7 @@ export default function RootLayout() {
         <Stack.Screen name="favoritas" options={{ headerShown: false }} />
         <Stack.Screen name="busca" options={{ headerShown: false }} />
         <Stack.Screen name="historico" options={{ headerShown: false }} />
-        <Stack.Screen name="detalhes" options={{ headerShown: false }} />
+        <Stack.Screen name="sobrenos" options={{ headerShown: false }} />
         <Stack.Screen name="modal" options={{ headerShown: false }} />
         <Stack.Screen name="configuracoes" options={{ headerShown: false }} />
       </Stack>
