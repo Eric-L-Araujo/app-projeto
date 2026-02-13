@@ -25,9 +25,6 @@ export default function TelaDetalhes() {
         <BotaoCustomizado title="Voltar" onPress={() => router.back()} />
       </View>
 
-     
-
-
     </View>
   );
 }
